@@ -1,0 +1,57 @@
+# style.policy.yaml —— 「科研论文式作答」的唯一事实来源
+# 改这里 → 运行 tools/gen_style.py → 自动更新：
+#   1) style.prompt.mjs（插件注入的提示段）
+#   2) SKILL.md 中 <!-- STYLE:RULES:BEGIN --> … <!-- STYLE:RULES:END --> 之间的规则块
+# 不要直接改生成物。
+version: 4
+
+structure:
+  abstract_heading: "摘要"
+  detail_heading: "详细介绍"
+  references_heading: "参考文献"
+  heading_level: 2            # 2 = "##"，1 = "#"
+  detail_subheading_level: 3  # 详细介绍内部小节层级
+  only_three_h2: true         # 全文只允许这三个二级标题
+
+abstract:
+  max_sentences: 3
+  bold_first_sentence: true
+  require_file_links: true    # 本轮改动/新建文件 → 链接紧跟主题词
+  # 文件引用形态：inline-code = 行内代码（DSH 渲染成可点 chip，仅工作区内文件有效）
+  #                link        = /dsh-cite/source 链接（工作区外也可点）
+  file_ref_form: inline-code
+  forbid_in_abstract:
+    - "尺寸/规格参数（如 800×600）"
+    - "格式/技术形态（如纯矢量）"
+    - "依赖（如无外部字体）"
+    - "过程（改了几轮、迭代次数）"
+    - "自检结论（是否通过检查）"
+    - "绝对路径（如 E:\\ 或 C:\\ 盘符）"
+  # 机器可读的禁用词（lint 用）：对应上面每一条的典型 token
+  forbid_tokens: ["800×600", "纯矢量", "无外部字体", "迭代", "改了几轮", "自检"]
+
+citations:
+  style: numbered                 # [n]
+  local_file_link: "/dsh-cite/source?path=<绝对路径 URL 编码>&line=<起始行>&end=<结束行>"
+  external_link: "https://完整URL"
+  require_read_before_cite: true  # 硬闸门：引用本地文件前必须真正读过
+  evidence_grade: true            # 标注证据强度
+  grades: ["强", "中", "弱"]
+  external_source_fields: ["标题", "站点", "访问日期"]
+  require_access_date: true
+
+outputs:
+  gui: "可点击链接（/dsh-cite/source 路由）"
+  tui: "纯文本 `路径:行号`"
+  export_markdown: "相对路径 + 脚注，避免死链"
+  im_paste: "文件名 + 一句话来源"
+
+privacy:
+  sensitive_name_patterns: [".ssh", ".credentials", "id_rsa", "id_ed25519", ".pem", ".pfx", ".kdbx"]
+  external_mode_hint: "对外分享时链接只保留文件名或相对路径，正文不出现盘符"
+
+tone:
+  language: "中文书面语"
+  no_filler: true
+  no_hedging_words: ["我觉得", "大概", "众所周知"]
+  english_term_gloss: "中文主体回答中首次出现时加中文括注"

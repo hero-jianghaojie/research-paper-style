@@ -1,0 +1,25 @@
+{
+  "name": "dsh-cite-style",
+  "version": "0.1.0",
+  "description": "科研论文式回答风格 + 可点击引用溯源：先给中文 IEEE 摘要式结论，再展开论述；引用本地文件/网页用 [n] 标注，点击可跳转源文位置（只读预览，绝不编造路径）。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "citation",
+    "answer-style",
+    "academic"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

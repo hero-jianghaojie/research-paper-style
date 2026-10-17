@@ -1,0 +1,11 @@
+# dsh-cite-style —— 科研论文式回答 + 可点击引用溯源
+# 只插入一个 row；配置可通过 profile patch 覆盖（见 README）。
+- insert:
+    - id: dsh-cite-style
+      name: dsh-cite-style
+      config:
+        enabled: true
+        order: 0.2
+        maxBytes: 524288
+        contextLines: 12
+        allowRoots: []

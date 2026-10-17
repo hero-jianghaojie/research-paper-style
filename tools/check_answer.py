@@ -34,12 +34,16 @@ def load() -> dict:
     except Exception:
         return DEFAULTS
     ab = (d.get("abstract") or {})
+    em = (d.get("emphasis") or {})
     return {
         "max_sentences": int(ab.get("max_sentences", 3)),
         "bold_first": bool(ab.get("bold_first_sentence", True)),
         "require_file_links": bool(ab.get("require_file_links", True)),
         "forbid": list(ab.get("forbid_tokens") or ab.get("forbid_in_abstract") or DEFAULTS["forbid"]),
         "abs_path": DEFAULTS["abs_path"],
+        "forbid_html_tags": bool(em.get("forbid_html_tags", True)),
+        "per_paragraph_limit": int(em.get("per_paragraph_limit", 2)),
+        "abstract_no_color": bool(em.get("abstract_no_color", True)),
     }
 
 
@@ -98,6 +102,25 @@ def main() -> int:
 
     if detail is not None:
         checks.append(("详细介绍内部无 ## 小节", not re.search(r"^##\s", detail, re.M), ""))
+
+    # ── 强调体系检查 ──────────────────────────────────────────────────────
+    COLOR_MARKS = r"[🔴🟠🟢🔵]"
+    if cfg["forbid_html_tags"]:
+        bad_html = re.findall(r"</?(?:u|span|mark|ins|font|strong|em|small|big)\b[^>]*>", text, re.I)
+        checks.append(("未使用原始 HTML 标签（DSH 不渲染）", not bad_html,
+                       f"发现: {sorted(set(bad_html))[:5]}" if bad_html else ""))
+    if abstract is not None and cfg["abstract_no_color"]:
+        colored = re.findall(COLOR_MARKS, abstract) + (["~~"] if "~~" in abstract else [])
+        colored += re.findall(r"\\textcolor\{|\\colorbox\{", abstract)
+        checks.append(("摘要未用彩色/高亮/删除线", not colored, f"发现: {colored[:5]}" if colored else ""))
+    limit = cfg["per_paragraph_limit"]
+    over = []
+    for idx, para in enumerate(re.split(r"\n\s*\n", text)):
+        cnt = (len(re.findall(COLOR_MARKS, para)) + para.count("~~")
+               + len(re.findall(r"\\textcolor\{|\\colorbox\{|\\underline\{", para)))
+        if cnt > limit:
+            over.append(f"第{idx + 1}段 {cnt} 处")
+    checks.append((f"每段强调 ≤ {limit} 处", not over, "；".join(over[:3]) if over else ""))
 
     ok = True
     for name, passed, extra in checks:

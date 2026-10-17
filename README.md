@@ -50,7 +50,19 @@ dsh plugin --profile desktop add "<本仓库路径>\plugin"
 | `abstract` | ≤3 句、只给结论；**首句＝直接答案并加粗**；改动文件用**行内代码**写文件名（工作区内可点 chip，工作区外改链接）；禁止在摘要里放尺寸/格式/依赖/过程/自检/绝对路径 |
 | `citations` | `[n]` 递增；本地文件用 `/dsh-cite/source?path=…&line=…`；外部 URL 直链；**引用前必须真读过**；标注证据强度 `[强]/[中]/[弱]`；外部来源须含标题/站点/访问日期 |
 | `outputs` | GUI＝可点链接；TUI＝`路径:行号`；导出 Markdown＝相对路径+脚注；粘贴 IM＝文件名+一句话来源 |
+| `emphasis` | **彩色/下划线/高亮只能走 KaTeX 行内数学**（HTML 不渲染）：红=风险、橙=未验证、绿=通过、蓝=文件/命令；`\underline{}` 下划线、`\colorbox{}` 高亮；中文须包在 `\text{}` 内；每段 ≤2 处、摘要禁彩色；禁止 `<u>/<span>/<mark>` |
 | `privacy` | 敏感文件名黑名单（`.ssh`/`id_rsa`/`.pem` 等）在路由层直接 403；外发时不留盘符 |
+
+## 为什么彩色要用 KaTeX
+
+DSH 的 Markdown 渲染器**不放行原始 HTML**（无 `rehype-raw`，`html` 节点按文本输出），所以 `<u>`、`<span style="color:…">`、`<mark>` 都会显示成字面标签。唯一能输出彩色文字的是**行内数学**（KaTeX）：
+
+```markdown
+$\textcolor{#d93025}{\text{红字（风险）}}$   $\textcolor{#1a73e8}{\text{蓝字（文件）}}$
+$\underline{\text{下划线}}$              $\colorbox{#fff3cd}{\text{高亮底色}}$
+```
+
+中文必须包在 `\text{}` 内（否则按数学模式排、字距异常）；每个 `$…$` 只放一小段词。
 
 ## 工具链
 
@@ -61,11 +73,12 @@ python tools/gen_style.py
 # 一致性回归：两处产物是否与策略一致（不写盘）
 python tools/gen_style.py --check
 
-# 对一条回答做 lint（10 项：结构/句数/首句加粗/禁用内容/绝对路径/链接标签/内部 ##）
+# 对一条回答做 lint（13 项：结构/句数/首句加粗/禁用内容/绝对路径/链接标签/内部 ##/
+#                  原始 HTML/摘要彩色/每段强调上限）
 python tools/check_answer.py answer.md
 ```
 
-**黄金用例**：`pass-01/02` 应全绿；`fail-01`（未加粗 + 禁用词 + 绝对路径）、`fail-02`（多出 `##`）应各自报错。
+**黄金用例**：`pass-01/02` 应全绿；`fail-01`（未加粗 + 禁用词 + 绝对路径）、`fail-02`（多出 `##`）、`fail-03`（HTML 标签）、`fail-04`（摘要着色 + 一段超限）、`fail-05`（摘要 KaTeX 彩字）应各自报错。
 
 ## 已知限制
 

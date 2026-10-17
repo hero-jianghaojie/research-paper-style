@@ -46,6 +46,37 @@ outputs:
   export_markdown: "相对路径 + 脚注，避免死链"
   im_paste: "文件名 + 一句话来源"
 
+# 强调体系：DSH 的 Markdown 渲染器不支持原始 HTML（无 rehype-raw，html 节点按文本输出），
+# 但 **KaTeX 数学渲染可用**——彩色文字/下划线/底色高亮 只能通过行内数学实现：
+#   红字     $\textcolor{#d93025}{\text{文字}}$
+#   蓝字     $\textcolor{#1a73e8}{\text{文字}}$
+#   绿字     $\textcolor{#188038}{\text{文字}}$
+#   橙字     $\textcolor{#e37400}{\text{文字}}$
+#   下划线   $\underline{\text{文字}}$
+#   高亮底色 $\colorbox{#fff3cd}{\text{文字}}$
+# 注意：KaTeX 里的中文要包在 \text{} 内；每个 $…$ 尽量只放一小段词，避免整句进数学模式。
+emphasis:
+  forbid_html_tags: true
+  per_paragraph_limit: 2       # 每个段落（空行分隔）最多几处强调
+  abstract_no_color: true      # 摘要里不用彩色/高亮，保持克制（只留首句加粗）
+  color_syntax: "KaTeX 行内数学（见下方 forms）"
+  forms:
+    risk:       { marker: "🔴", style: "红字 $\\textcolor{#d93025}{\\text{…}}$ 或加粗", use: "风险/禁止/错误/会破坏数据" }
+    doubt:      { marker: "🟠", style: "橙字 $\\textcolor{#e37400}{\\text{…}}$ + 括注（未验证）", use: "存疑/未验证/待复核的数值或结论" }
+    ok:         { marker: "🟢", style: "绿字 $\\textcolor{#188038}{\\text{…}}$ 或加粗", use: "通过/成功/已核实" }
+    info:       { marker: "🔵", style: "蓝字 $\\textcolor{#1a73e8}{\\text{…}}$ 或行内代码", use: "文件路径/命令/可点元素" }
+    underline:  { marker: "＿", style: "$\\underline{\\text{…}}$", use: "定义/术语首现" }
+    highlight:  { marker: "▮", style: "$\\colorbox{#fff3cd}{\\text{…}}$", use: "必记结论（每节最多一处）" }
+    deprecated: { marker: "~~", style: "删除线", use: "已废弃/被否决的方案" }
+    key:        { marker: "**", style: "加粗", use: "结论性短语（每节最多一处）" }
+    formula:    { marker: "$", style: "公式内 $\\textcolor{#d93025}{…}$", use: "公式内的彩色强调" }
+  examples:
+    - "🔴 $\\textcolor{#d93025}{\\text{这条命令会覆盖原文件}}$ —— 执行前先备份。"
+    - "增益约 $\\textcolor{#e37400}{\\text{2.1 dB}}$（未验证，待复核）。"
+    - "$\\textcolor{#188038}{\\text{校验通过}}$；回归 10/10。"
+    - "$\\underline{\\text{power-added efficiency}}$（功率附加效率，PAE）"
+    - "~~旧方案~~ 已废弃，改用新参数。"
+
 privacy:
   sensitive_name_patterns: [".ssh", ".credentials", "id_rsa", "id_ed25519", ".pem", ".pfx", ".kdbx"]
   external_mode_hint: "对外分享时链接只保留文件名或相对路径，正文不出现盘符"

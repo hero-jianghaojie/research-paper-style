@@ -17,13 +17,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 POLICY = ROOT / "style.policy.yaml"
-# 注入产物：仓库里放在 plugin/ 下（与 index.js 同目录，便于相对 import）；
-# 也可用环境变量 STYLE_PROMPT_OUT 指定。
+# 注入产物：优先放 plugin/ 下（与 index.js 同目录，便于相对 import）；也可用 STYLE_PROMPT_OUT 指定。
 PROMPT = Path(os.environ.get("STYLE_PROMPT_OUT", str(
     (ROOT / "plugin" / "style.prompt.mjs") if (ROOT / "plugin").is_dir() else (ROOT / "style.prompt.mjs")
 )))
-# 技能文件：默认仓库根的 SKILL.md；可用环境变量 STYLE_SKILL 指向已安装的技能。
-SKILL = Path(os.environ.get("STYLE_SKILL", str(ROOT / "SKILL.md")))
+# 技能文件：优先仓库根的 SKILL.md；否则用已安装技能（~/.agents/skills/…）；可用 STYLE_SKILL 指定。
+_DEFAULT_SKILL = (ROOT / "SKILL.md") if (ROOT / "SKILL.md").exists() else (
+    Path.home() / ".agents" / "skills" / "research-paper-style" / "SKILL.md"
+)
+SKILL = Path(os.environ.get("STYLE_SKILL", str(_DEFAULT_SKILL)))
 BEGIN = "<!-- STYLE:RULES:BEGIN -->"
 END = "<!-- STYLE:RULES:END -->"
 
@@ -78,6 +80,18 @@ def build_prompt(p: dict) -> list[str]:
     L.append("6) 输出形态：" + "；".join(f"{k}→{v}" for k, v in out.items()) + "。")
     if pv.get("external_mode_hint"):
         L.append(f"   隐私：{pv['external_mode_hint']}")
+    em = p.get("emphasis") or {}
+    if em:
+        forms = em.get("forms") or {}
+        if em.get("forbid_html_tags"):
+            L.append("7) 强调：**禁止原始 HTML**（`<u>`/`<span>`/`<mark>` 等不会被渲染，会显示成字面标签）；彩色/下划线/高亮**只能用 KaTeX 行内数学**，其余用 Markdown/符号：")
+        else:
+            L.append("7) 强调：只用下面这套形式：")
+        for key, spec in forms.items():
+            L.append(f"   - {spec.get('marker','')} {spec.get('style','')}：{spec.get('use','')}（{key}）")
+        L.append(f"   每段（空行分隔）最多 {em.get('per_paragraph_limit', 2)} 处强调；颜色/符号**不能是唯一信息载体**，须配文字说明。")
+        if em.get("abstract_no_color"):
+            L.append("   摘要里不用彩色/高亮（🔴🟠🟢 与 $\\textcolor{}$、$\\colorbox{}$）与删除线——摘要只保留「首句加粗」这一处强调。")
     return L
 
 
@@ -125,6 +139,20 @@ def build_rules_md(p: dict) -> str:
         "",
         f"- {tn['language']}；不写客套话；不用「" + "、".join(tn.get("no_hedging_words", [])) + "」这类软词。",
     ]
+    em = p.get("emphasis") or {}
+    if em:
+        L += ["", "## 强调体系（只许这些形式）", ""]
+        if em.get("forbid_html_tags"):
+            L.append("> ⚠️ **禁止原始 HTML**：DSH 的 Markdown 渲染器没有 rehype-raw，`<u>`/`<span>`/`<mark>` 会显示成字面标签。")
+            L.append("")
+        L += ["| 语义 | 形式 | 用在哪 |", "|---|---|---|"]
+        for key, spec in (em.get("forms") or {}).items():
+            L.append(f"| {spec.get('marker','')} | {spec.get('style','')} | {spec.get('use','')} |")
+        L += ["", f"- 每段（空行分隔）最多 **{em.get('per_paragraph_limit', 2)}** 处强调；颜色/符号不是唯一信息载体。"]
+        if em.get("abstract_no_color"):
+            L.append("- **摘要里不用颜色符号与删除线**，只保留首句加粗。")
+        for ex in (em.get("examples") or []):
+            L.append(f"- 例：{ex}")
     return "\n".join(x for x in L)
 
 
@@ -179,21 +207,20 @@ def main() -> int:
         SKILL.write_text(new_skill, encoding="utf-8")
         print("✅ 已更新 SKILL.md 规则块")
 
-    # 工作区镜像（可选）：DSH 的 chip 只能打开工作区内文件；设置 CITE_STYLE_MIRROR
-    # 后会把策略文件同步到该目录，摘要里就能用行内代码 `style.policy.yaml` 生成可点 chip。
+    # 工作区镜像（可选）：DSH 的文件 chip 只能打开「工作区内」的文件；设置
+    # CITE_STYLE_MIRROR 后把策略同步到该目录，摘要里就能用行内代码生成可点 chip。
     mirror_env = os.environ.get("CITE_STYLE_MIRROR", "")
-    if mirror_env:
-        mirror_dir = Path(mirror_env)
-        if mirror_dir.is_dir():
-            mirror = mirror_dir / "style.policy.yaml"
-            src_text = POLICY.read_text(encoding="utf-8")
-            if not mirror.exists() or mirror.read_text(encoding="utf-8") != src_text:
-                mirror.write_text(src_text, encoding="utf-8")
-                print(f"✅ 已同步工作区镜像：{mirror}")
-            else:
-                print(f"✅ 工作区镜像已是最新：{mirror}")
+    mirror_dir = Path(mirror_env) if mirror_env else None
+    if mirror_dir is not None and mirror_dir.is_dir():
+        mirror = mirror_dir / "style.policy.yaml"
+        src_text = POLICY.read_text(encoding="utf-8")
+        if not mirror.exists() or mirror.read_text(encoding="utf-8") != src_text:
+            mirror.write_text(src_text, encoding="utf-8")
+            print(f"✅ 已同步工作区镜像：{mirror}")
         else:
-            print(f"ℹ️ 镜像目录不存在，跳过：{mirror_dir}")
+            print(f"✅ 工作区镜像已是最新：{mirror}")
+    elif mirror_dir is not None:
+        print(f"ℹ️ 工作区镜像目录不存在，跳过：{mirror_dir}")
 
     print(f"✅ 已生成 {PROMPT.name}（{len(lines)} 行，{len(text)} 字符）")
     return 0

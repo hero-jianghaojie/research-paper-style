@@ -272,19 +272,12 @@ export function apply(ctx, config) {
     }
   }, `${name}.section()`)
 
-  // ── 2) 只读预览路由（web 服务未必存在，运行时探测） ─────────────────────────
+  // ── 2) 只读预览路由（插件可能在 web 服务发布之前挂载 → 需要重试等待） ───────
   ctx.effect(() => {
+    let disposed = false
+    let timer = null
     const disposers = []
-    let web = null
-    try {
-      web = typeof ctx.get === 'function' ? ctx.get('webServer') : null
-    } catch {
-      web = null
-    }
-    if (!web || typeof web.register !== 'function') {
-      ctx.logger?.info?.(`[${name}] 未检测到 webServer，跳过引用预览路由（非 web composition 属正常）`)
-      return () => {}
-    }
+
     const handler = (req, res) => {
       const url = String(req.url || '')
       if (url.startsWith(`${ROUTE_PREFIX}/health`)) return handleHealth(res)
@@ -304,13 +297,52 @@ export function apply(ctx, config) {
         }
       })
     }
-    try {
-      disposers.push(web.register({ kind: 'prefix', path: ROUTE_PREFIX, handler }))
-      ctx.logger?.info?.(`[${name}] 引用预览路由已就绪：${ROUTE_PREFIX}/source`)
-    } catch (error) {
-      ctx.logger?.warn?.(`[${name}] 路由注册失败：${String(error?.message ?? error)}`)
+
+    const getWeb = () => {
+      try {
+        return typeof ctx.get === 'function' ? ctx.get('webServer') : null
+      } catch {
+        return null
+      }
     }
+
+    const registerOn = (web) => {
+      try {
+        disposers.push(web.register({ kind: 'prefix', path: ROUTE_PREFIX, handler }))
+        ctx.logger?.info?.(`[${name}] 引用预览路由已就绪（prefix）：${ROUTE_PREFIX}/source`)
+        return true
+      } catch (error) {
+        ctx.logger?.warn?.(`[${name}] prefix 注册失败，改用 exact：${String(error?.message ?? error)}`)
+      }
+      let ok = false
+      for (const suffix of ['/health', '/source']) {
+        try {
+          disposers.push(web.register({ kind: 'exact', path: `${ROUTE_PREFIX}${suffix}`, handler }))
+          ok = true
+        } catch (error) {
+          ctx.logger?.warn?.(`[${name}] exact 注册失败 ${suffix}：${String(error?.message ?? error)}`)
+        }
+      }
+      if (ok) ctx.logger?.info?.(`[${name}] 引用预览路由已就绪（exact）：${ROUTE_PREFIX}/source`)
+      return ok
+    }
+
+    const attempt = (n) => {
+      if (disposed) return
+      const web = getWeb()
+      if (!web || typeof web.register !== 'function') {
+        if (n === 0) ctx.logger?.info?.(`[${name}] webServer 尚未发布，开始重试（最多 10s）`)
+        if (n < 40) timer = setTimeout(() => attempt(n + 1), 250)
+        else ctx.logger?.warn?.(`[${name}] 等待 webServer 超时，未注册引用预览路由（非 web composition 属正常）`)
+        return
+      }
+      registerOn(web)
+    }
+    attempt(0)
+
     return () => {
+      disposed = true
+      if (timer) clearTimeout(timer)
       for (const dispose of disposers) {
         try {
           dispose()
